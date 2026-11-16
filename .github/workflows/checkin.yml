@@ -1,0 +1,46 @@
+name: ima 每日签到
+
+on:
+  schedule:
+    # UTC 22:00 = 北京时间次日 06:00（GitHub 定时任务只认 UTC，且有 1~4 小时延迟）
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ima-checkin
+  cancel-in-progress: false
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Shanghai
+      IMA_CRED_FILE: ${{ github.workspace }}/credentials.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 还原凭证
+        env:
+          IMA_CREDENTIALS: ${{ secrets.IMA_CREDENTIALS }}
+        run: |
+          if [ -z "$IMA_CREDENTIALS" ]; then
+            echo "::error::未配置 IMA_CREDENTIALS Secret，请在仓库 Settings → Secrets and variables → Actions 中添加"
+            exit 1
+          fi
+          printf '%s' "$IMA_CREDENTIALS" > "$IMA_CRED_FILE"
+          chmod 600 "$IMA_CRED_FILE"
+
+      - name: 执行签到
+        run: python3 scripts/checkin.py
+
+      - name: 清理凭证
+        if: always()
+        run: rm -f "$IMA_CRED_FILE"
